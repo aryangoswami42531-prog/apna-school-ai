@@ -842,16 +842,24 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
     executedTools.push({ name: toolName, input: { studentId: user.id }, result: attRec });
 
     if (attRec) {
-      reply = getLocalizedText({
-        language,
-        en: `${attRec.studentName}'s overall attendance is ${attRec.overallPercentage}% (${attRec.daysPresent} Days Present, ${attRec.daysAbsent} Days Absent). Would you like to check subject marks?`,
-        hi: `${attRec.studentName} की कुल उपस्थिति ${attRec.overallPercentage}% है (${attRec.daysPresent} दिन उपस्थित, ${attRec.daysAbsent} दिन अनुपस्थित)। क्या आप विषय-वार अंक भी देखना चाहते हैं?`
-      });
+      if (user.role === "parent") {
+        reply = getLocalizedText({
+          language,
+          en: `Your child ${attRec.studentName}'s overall attendance is ${attRec.overallPercentage}% (${attRec.daysPresent} Days Present, ${attRec.daysAbsent} Days Absent). Would you like to check subject marks?`,
+          hi: `आपके बच्चे ${attRec.studentName} की कुल उपस्थिति ${attRec.overallPercentage}% है (${attRec.daysPresent} दिन उपस्थित, ${attRec.daysAbsent} दिन अनुपस्थित)। क्या आप विषय-वार अंक भी देखना चाहते हैं?`
+        });
+      } else {
+        reply = getLocalizedText({
+          language,
+          en: `${attRec.studentName}'s overall attendance is ${attRec.overallPercentage}% (${attRec.daysPresent} Days Present, ${attRec.daysAbsent} Days Absent). Would you like to check subject marks?`,
+          hi: `${attRec.studentName} की कुल उपस्थिति ${attRec.overallPercentage}% है (${attRec.daysPresent} दिन उपस्थित, ${attRec.daysAbsent} दिन अनुपस्थित)। क्या आप विषय-वार अंक भी देखना चाहते हैं?`
+        });
+      }
     } else {
       reply = getLocalizedText({
         language,
         en: `No attendance record found yet. Would you like to check subject marks?`,
-        hi: `अभी तक आपकी उपस्थिति दर्ज नहीं हुई है। क्या आप विषय-वार अंक देखना चाहते हैं?`
+        hi: `अभी तक उपस्थिति दर्ज नहीं हुई है। क्या आप विषय-वार अंक देखना चाहते हैं?`
       });
     }
     return { reply, executedTools, mode: "ATTENDANCE_QUERY" };

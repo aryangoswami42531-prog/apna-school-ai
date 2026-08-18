@@ -192,14 +192,37 @@ export function findMatchingRecordForUser(recordsStore, user) {
     if (recordByExactId) return recordByExactId;
   }
 
-  // 4. Match by student name
+  // 4. Match by parent child name or user name
+  const childNameFromUser = user.children?.[0]?.name;
+  if (childNameFromUser) {
+    const cleanChild = childNameFromUser.toLowerCase();
+    const recordByChildName = Object.values(recordsStore).find(r => (r.studentName || "").toLowerCase().includes(cleanChild));
+    if (recordByChildName) return recordByChildName;
+  }
+
   if (user.name) {
     const cleanName = user.name.toLowerCase().replace(/^parent of\s+/i, "");
     const recordByName = Object.values(recordsStore).find(r => (r.studentName || "").toLowerCase().includes(cleanName));
     if (recordByName) return recordByName;
   }
 
-  // 5. If student exists but has no record in recordsStore yet, return an empty record for this user
+  // 5. If parent has childId or childName, create/return an empty record for THAT child instead of STU1001
+  if (user.role === "parent" && (childId || childNameFromUser)) {
+    const targetChildId = childId || `STU_DYNAMIC_${Date.now()}`;
+    const targetChildName = childNameFromUser || (user.name ? user.name.replace(/^parent of\s+/i, "") : "Child");
+    const emptyChildRec = {
+      studentId: targetChildId,
+      studentName: targetChildName,
+      overallPercentage: 100.0,
+      daysPresent: 1,
+      daysAbsent: 0,
+      history: [{ date: new Date().toISOString().split("T")[0], status: "Present" }]
+    };
+    recordsStore[targetChildId] = emptyChildRec;
+    return emptyChildRec;
+  }
+
+  // 6. If student exists but has no record in recordsStore yet, return an empty record for this user
   if (user.id && user.role === "student") {
     return {
       studentId: user.id,

@@ -209,6 +209,12 @@ async function runTests() {
   const kiranLogin = findOrCreateStudentUser({ username: "kiran.student", password: "pass123" });
   assert(kiranLogin.id === regRes.student.id && kiranLogin.name === "Kiran", "Login as 'kiran.student' returns Kiran's exact registered student profile");
 
+  // TEST 15: Parent Child Attendance Query Verification
+  console.log("\n[TEST 15] Parent Child Attendance Query Verification");
+  const kiranParent = findOrCreateParentUser({ username: "kiran.parent", password: "pass123" });
+  const parentAtt = await processChatConversation({ messages: [{ role: "user", content: "mere bache ki attendance" }], user: kiranParent, language: "Hindi" });
+  assert(parentAtt.mode === "ATTENDANCE_QUERY" && parentAtt.reply.includes("Kiran"), "Parent prompt 'mere bache ki attendance' returns Kiran's attendance stats, NOT Rahul Kumar");
+
   console.log("\n==================================================");
   console.log(`   TEST RESULTS: ${passed} PASSED, ${failed} FAILED    `);
   console.log("==================================================");
