@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+package-lock.json
+
+# Environment Variables & Secrets (CRITICAL SECURITY)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Operating System & IDE Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build & Dist Outputs
+dist/
+build/
+out/
+.next/
+*.log
+
+# Archives & Temporary Files
+*.zip
+*.tar.gz
+*.tgz
+scratch/
+.gemini/
+.system_generated/
