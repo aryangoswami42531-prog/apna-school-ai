@@ -11,7 +11,7 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const demoAccounts = [
-    { label: "Parent Portal", user: "parent.rahul", pass: "pass123", roleKey: "parent", roleDesc: "Parent of Raj Kumar" },
+    { label: "Parent Portal", user: "raj.parent", pass: "pass123", roleKey: "parent", roleDesc: "Parent of Raj Kumar" },
     { label: "Student Portal", user: "raj.student", pass: "pass123", roleKey: "student", roleDesc: "Raj Kumar (Student)" },
     { label: "Teacher Portal", user: "manya.teacher", pass: "pass123", roleKey: "teacher", roleDesc: "Ms. Manya (Class Teacher)" },
     { label: "Principal Management", user: "principal", pass: "pass123", roleKey: "principal", roleDesc: "Dr. V. K. Mehta" }

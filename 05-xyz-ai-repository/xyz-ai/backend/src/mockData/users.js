@@ -62,15 +62,6 @@ export let MOCK_USERS = {
     grade: "10-A",
     rollNumber: 21
   },
-  "rahul.student": {
-    id: "STU1001",
-    username: "rahul.student",
-    password: "pass123",
-    name: "Raj Kumar",
-    role: "student",
-    grade: "10-A",
-    rollNumber: 21
-  },
   "manya.student": {
     id: "STU1002",
     username: "manya.student",
@@ -91,14 +82,6 @@ export let MOCK_USERS = {
   "raj.parent": {
     id: "PAR_STU1001",
     username: "raj.parent",
-    password: "pass123",
-    name: "Mr. Suresh Kumar",
-    role: "parent",
-    children: [{ id: "STU1001", name: "Raj Kumar", grade: "10-A" }]
-  },
-  "rahul.parent": {
-    id: "PAR_STU1001",
-    username: "rahul.parent",
     password: "pass123",
     name: "Mr. Suresh Kumar",
     role: "parent",
