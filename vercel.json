@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "05-xyz-ai-repository/xyz-ai/backend/src/server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "05-xyz-ai-repository/xyz-ai/frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "05-xyz-ai-repository/xyz-ai/backend/src/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "05-xyz-ai-repository/xyz-ai/frontend/$1"
+    }
+  ]
+}
