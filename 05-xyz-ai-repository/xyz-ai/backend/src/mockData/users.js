@@ -192,6 +192,25 @@ export function findMatchingRecordForUser(recordsStore, user) {
     if (recordByExactId) return recordByExactId;
   }
 
+  // 4. Match by student name
+  if (user.name) {
+    const cleanName = user.name.toLowerCase().replace(/^parent of\s+/i, "");
+    const recordByName = Object.values(recordsStore).find(r => (r.studentName || "").toLowerCase().includes(cleanName));
+    if (recordByName) return recordByName;
+  }
+
+  // 5. If student exists but has no record in recordsStore yet, return an empty record for this user
+  if (user.id && user.role === "student") {
+    return {
+      studentId: user.id,
+      studentName: user.name || "Student",
+      overallPercentage: 100.0,
+      daysPresent: 1,
+      daysAbsent: 0,
+      history: [{ date: new Date().toISOString().split("T")[0], status: "Present" }]
+    };
+  }
+
   // Fallback to STU1001 so real-time data is always returned
   return recordsStore["STU1001"] || null;
 }
@@ -293,8 +312,16 @@ export function findOrCreateStudentUser({ username, password }) {
     return MOCK_USERS["manya.student"];
   }
 
-  if (baseName.includes("raj") || baseName.includes("rahul") || baseName === "student" || !baseName) {
+  if (baseName.includes("raj") || baseName === "student" || !baseName) {
     return MOCK_USERS["student"];
+  }
+
+  // Check if teacher already registered or marked attendance/marks for a student matching this name
+  const matches = findStudentByName(baseName);
+  if (matches.length > 0) {
+    const studentObj = matches[0];
+    MOCK_USERS[cleanUsername] = studentObj;
+    return studentObj;
   }
 
   baseName = baseName ? (baseName.charAt(0).toUpperCase() + baseName.slice(1)) : "Student";
@@ -330,8 +357,24 @@ export function findOrCreateParentUser({ username, password }) {
     };
   }
 
-  if (baseName.includes("raj") || baseName.includes("rahul") || baseName === "parent" || !baseName) {
-    return MOCK_USERS["parent"];
+  if (baseName.includes("raj") || baseName === "parent" || !baseName) {
+    return MOCK_USERS["raj.parent"];
+  }
+
+  // Check if teacher already registered or marked attendance/marks for a student matching this name
+  const matches = findStudentByName(baseName);
+  if (matches.length > 0) {
+    const studentObj = matches[0];
+    const parentObj = {
+      id: `PAR_${studentObj.id}`,
+      username: cleanUsername,
+      password: password || "pass123",
+      name: `Parent of ${studentObj.name}`,
+      role: "parent",
+      children: [{ id: studentObj.id, name: studentObj.name, grade: studentObj.grade || "10-A" }]
+    };
+    MOCK_USERS[cleanUsername] = parentObj;
+    return parentObj;
   }
 
   baseName = baseName ? (baseName.charAt(0).toUpperCase() + baseName.slice(1)) : "Student";

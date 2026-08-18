@@ -203,6 +203,12 @@ async function runTests() {
   const s_att = await processChatConversation({ messages: [{ role: "user", content: "mere atendace kitni" }], user: stuObj, language: "Hindi" });
   assert(s_att.mode === "ATTENDANCE_QUERY" && s_att.reply.includes("उपस्थिति") && !s_att.reply.includes("तारीख"), "Student prompt 'mere atendace kitni' returns overall attendance percentage, NOT marking prompt");
 
+  // TEST 14: Dynamic Student Login Roster Match Verification
+  console.log("\n[TEST 14] Dynamic Student Login Roster Match Verification");
+  const regRes = registerNewStudent({ name: "Kiran" });
+  const kiranLogin = findOrCreateStudentUser({ username: "kiran.student", password: "pass123" });
+  assert(kiranLogin.id === regRes.student.id && kiranLogin.name === "Kiran", "Login as 'kiran.student' returns Kiran's exact registered student profile");
+
   console.log("\n==================================================");
   console.log(`   TEST RESULTS: ${passed} PASSED, ${failed} FAILED    `);
   console.log("==================================================");
