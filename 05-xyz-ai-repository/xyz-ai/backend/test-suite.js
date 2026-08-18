@@ -215,6 +215,12 @@ async function runTests() {
   const parentAtt = await processChatConversation({ messages: [{ role: "user", content: "mere bache ki attendance" }], user: kiranParent, language: "Hindi" });
   assert(parentAtt.mode === "ATTENDANCE_QUERY" && parentAtt.reply.includes("Kiran"), "Parent prompt 'mere bache ki attendance' returns Kiran's attendance stats, NOT Rahul Kumar");
 
+  // TEST 16: Student Persona Attendance Query Isolation (Never triggers teacher marking prompt)
+  console.log("\n[TEST 16] Student Persona Attendance Query Isolation (Never triggers teacher marking prompt)");
+  const deepakStudent = findOrCreateStudentUser({ username: "deepak.student", password: "pass123" });
+  const studentAtt = await processChatConversation({ messages: [{ role: "user", content: "Meri attendance Kitni Hai" }], user: deepakStudent, language: "Hindi" });
+  assert(studentAtt.mode === "ATTENDANCE_QUERY" && studentAtt.reply.includes("आपकी कुल उपस्थिति") && !studentAtt.reply.includes("Konsi date"), "Student prompt 'Meri attendance Kitni Hai' returns personalized 'आपकी कुल उपस्थिति', NOT teacher marking question");
+
   console.log("\n==================================================");
   console.log(`   TEST RESULTS: ${passed} PASSED, ${failed} FAILED    `);
   console.log("==================================================");

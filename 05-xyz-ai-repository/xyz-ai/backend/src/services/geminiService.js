@@ -460,8 +460,8 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
         const subList = markRec.subjects.map(s => `${s.subject}: ${s.marksObtained}/${s.maxMarks || 100} (${s.letterGrade})`).join(", ");
         reply = getLocalizedText({
           language,
-          en: `${markRec.studentName}'s Academic Subject Marks: ${subList}.`,
-          hi: `${markRec.studentName} के अकादमिक विषय-वार अंक: ${subList}।`
+          en: `Your Academic Subject Marks: ${subList}.`,
+          hi: `आपके अकादमिक विषय-वार अंक: ${subList}।`
         });
       } else {
         reply = getLocalizedText({
@@ -540,7 +540,7 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
   }
 
   // ----------------------------------------------------
-  // 2. ACTIVE CONVERSATIONAL MULTI-STEP STATE MACHINE
+  // 2. ACTIVE CONVERSATIONAL MULTI-STEP STATE MACHINE (Teacher Role Only)
   // ----------------------------------------------------
 
   const isFollowupContext = prevAssistantMsg.includes("?") || prevAssistantMsg.includes("chahte") || prevAssistantMsg.includes("want") || prevAssistantMsg.includes("kisi aur");
@@ -565,74 +565,104 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
     return { reply, executedTools, mode: "FOLLOW_UP_CLOSING" };
   }
 
-  // Step C1: AI asked "Which student's attendance or marks" -> User gives input
-  const isInitialGreetingContext = 
-    (prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("which student") || prevAssistantMsg.includes("konse bache")) &&
-    (prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("attendance")) &&
-    (prevAssistantMsg.includes("अंक") || prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("मार्क्स"));
+  if (user.role === "teacher") {
+    // Step C1: AI asked "Which student's attendance or marks" -> User gives input
+    const isInitialGreetingContext = 
+      (prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("which student") || prevAssistantMsg.includes("konse bache")) &&
+      (prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("attendance")) &&
+      (prevAssistantMsg.includes("अंक") || prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("मार्क्स"));
 
-  if (isInitialGreetingContext) {
-    // If the user explicitly stated MARKS intent e.g. "marks lagane hain" or "marks" or "I want to enter marks"
-    if (isMarksAction) {
+    if (isInitialGreetingContext) {
+      if (isMarksAction) {
+        reply = getLocalizedText({
+          language,
+          en: "Which student's marks would you like to update?",
+          hi: "किस छात्र के अंक/मार्क्स दर्ज करने हैं?"
+        });
+        return { reply, executedTools, mode: "MARKS_STEP_1" };
+      }
+
+      if (isAttendanceAction) {
+        reply = getLocalizedText({
+          language,
+          en: "Which student's attendance would you like to mark?",
+          hi: "किस छात्र की उपस्थिति दर्ज करनी है?"
+        });
+        return { reply, executedTools, mode: "CONVERSATIONAL_STEP_1" };
+      }
+
+      const studentName = lastUserMsg.trim();
+      let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
+
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+        executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
+      }
+
       reply = getLocalizedText({
         language,
-        en: "Which student's marks would you like to update?",
-        hi: "किस छात्र के अंक/मार्क्स दर्ज करने हैं?"
+        en: `Would you like to mark Attendance or enter Subject Marks for ${studentObj.name}?`,
+        hi: `${studentObj.name} की अटेंडेंस लगानी है या मार्क्स दर्ज करने हैं?`
       });
-      return { reply, executedTools, mode: "MARKS_STEP_1" };
+      return { reply, executedTools, mode: "DISAMBIGUATION_STEP" };
     }
 
-    // If the user explicitly stated ATTENDANCE intent e.g. "attendance lagani hai" or "attendance"
-    if (isAttendanceAction) {
-      reply = getLocalizedText({
-        language,
-        en: "Which student's attendance would you like to mark?",
-        hi: "किस छात्र की उपस्थिति दर्ज करनी है?"
-      });
-      return { reply, executedTools, mode: "CONVERSATIONAL_STEP_1" };
+    // Step C2: AI asked "Attendance lagani hai ya Marks" -> User says "Marks" or "Attendance"
+    if (
+      (prevAssistantMsg.includes("attendance") || prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("हाजिरी")) &&
+      (prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("मार्क्स") || prevAssistantMsg.includes("अंक"))
+    ) {
+      const isAttendanceChoice = /attendance|attandance|atendance|haziri|haajri|हाजिरी|अटेंडेंस|presence|presents|present|absent|आया|आयी|आए|उपस्थिति/i.test(lowerMsg);
+      const isMarksChoice = !isAttendanceChoice || /marks|nambar|numbr|namber|number|अंक|मार्क्स|नंबर|score|result|दर्ज|लगा|डाल|विषय|सब्जेक्ट|ग्रेड/i.test(lowerMsg);
+
+      const targetStudentName = transcriptData.studentName || "student";
+      let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+      }
+
+      if (isMarksChoice && !isAttendanceChoice) {
+        reply = getLocalizedText({
+          language,
+          en: `${studentObj.name}'s marks will be entered. Which subject?`,
+          hi: `${studentObj.name} के मार्क्स लगाने हैं। कौन से सब्जेक्ट में लगाने हैं?`
+        });
+        return { reply, executedTools, mode: "MARKS_STEP_2" };
+      } else {
+        reply = getLocalizedText({
+          language,
+          en: `Ok, ${studentObj.name}. Konsi date ki attendance lagani hai?`,
+          hi: `ठीक है, ${studentObj.name}। कौन सी तारीख की अटेंडेंस लगानी है?`
+        });
+        return { reply, executedTools, mode: "CONVERSATIONAL_STEP_2" };
+      }
     }
 
-    // Otherwise, user gave a student name (e.g. "Rahul", "Manya", "Aryan")
-    const studentName = lastUserMsg.trim();
-    let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
+    // Step A2: AI asked "Kis bache ki attendance lagani hai" -> User gives Name for ATTENDANCE
+    if (
+      (prevAssistantMsg.includes("attendance") || prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("हाजिरी")) &&
+      (prevAssistantMsg.includes("kis bache") || prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("bache ki"))
+    ) {
+      const studentName = lastUserMsg.trim();
+      if (isInvalidStudentName(studentName)) {
+        reply = getLocalizedText({
+          language,
+          en: "Which student's attendance would you like to mark?",
+          hi: "किस छात्र की उपस्थिति दर्ज करनी है?"
+        });
+        return { reply, executedTools, mode: "CONVERSATIONAL_STEP_1" };
+      }
 
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
-      executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
-    }
+      let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
 
-    reply = getLocalizedText({
-      language,
-      en: `Would you like to mark Attendance or enter Subject Marks for ${studentObj.name}?`,
-      hi: `${studentObj.name} की अटेंडेंस लगानी है या मार्क्स दर्ज करने हैं?`
-    });
-    return { reply, executedTools, mode: "DISAMBIGUATION_STEP" };
-  }
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+        executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
+      }
 
-  // Step C2: AI asked "Attendance lagani hai ya Marks" -> User says "Marks" or "Attendance"
-  if (
-    (prevAssistantMsg.includes("attendance") || prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("हाजिरी")) &&
-    (prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("मार्क्स") || prevAssistantMsg.includes("अंक"))
-  ) {
-    const isAttendanceChoice = /attendance|attandance|atendance|haziri|haajri|हाजिरी|अटेंडेंस|presence|presents|present|absent|आया|आयी|आए|उपस्थिति/i.test(lowerMsg);
-    const isMarksChoice = !isAttendanceChoice || /marks|nambar|numbr|namber|number|अंक|मार्क्स|नंबर|score|result|दर्ज|लगा|डाल|विषय|सब्जेक्ट|ग्रेड/i.test(lowerMsg);
-
-    const targetStudentName = transcriptData.studentName || "student";
-    let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
-    }
-
-    if (isMarksChoice && !isAttendanceChoice) {
-      reply = getLocalizedText({
-        language,
-        en: `${studentObj.name}'s marks will be entered. Which subject?`,
-        hi: `${studentObj.name} के मार्क्स लगाने हैं। कौन से सब्जेक्ट में लगाने हैं?`
-      });
-      return { reply, executedTools, mode: "MARKS_STEP_2" };
-    } else {
       reply = getLocalizedText({
         language,
         en: `Ok, ${studentObj.name}. Konsi date ki attendance lagani hai?`,
@@ -640,153 +670,122 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
       });
       return { reply, executedTools, mode: "CONVERSATIONAL_STEP_2" };
     }
-  }
 
-  // Step A2: AI asked "Kis bache ki attendance lagani hai" -> User gives Name for ATTENDANCE
-  if (
-    (prevAssistantMsg.includes("attendance") || prevAssistantMsg.includes("अटेंडेंस") || prevAssistantMsg.includes("हाजिरी")) &&
-    (prevAssistantMsg.includes("kis bache") || prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("bache ki"))
-  ) {
-    const studentName = lastUserMsg.trim();
-    if (isInvalidStudentName(studentName)) {
+    // Step A3: AI asked "Konsi date ki" -> User gives Date
+    if (prevAssistantMsg.includes("konsi date ki") || prevAssistantMsg.includes("कौन सी तारीख") || prevAssistantMsg.includes("date ki attendance")) {
+      const dateStr = lastUserMsg.trim();
+
       reply = getLocalizedText({
         language,
-        en: "Which student's attendance would you like to mark?",
-        hi: "किस छात्र की उपस्थिति दर्ज करनी है?"
+        en: `${dateStr} ko ${transcriptData.studentName || "student"} Present hai ya Absent?`,
+        hi: `${dateStr} को ${transcriptData.studentName || "student"} Present है या Absent?`
       });
-      return { reply, executedTools, mode: "CONVERSATIONAL_STEP_1" };
+      return { reply, executedTools, mode: "CONVERSATIONAL_STEP_3" };
     }
 
-    let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
+    // Step A4: AI asked "Present hai ya Absent" -> User gives Status
+    if (prevAssistantMsg.includes("present hai ya absent") || prevAssistantMsg.includes("present है या absent") || prevAssistantMsg.includes("present") || prevAssistantMsg.includes("absent")) {
+      const isAbsent = lowerMsg.includes("absent") || lowerMsg.includes("अब्सेंट") || lowerMsg.includes("अनुपस्थित") || lowerMsg.includes("nahi");
+      const status = isAbsent ? "Absent" : "Present";
 
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
-      executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
-    }
+      const targetStudentName = transcriptData.studentName || "student";
+      let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+      }
 
-    reply = getLocalizedText({
-      language,
-      en: `Ok, ${studentObj.name}. Konsi date ki attendance lagani hai?`,
-      hi: `ठीक है, ${studentObj.name}। कौन सी तारीख की अटेंडेंस लगानी है?`
-    });
-    return { reply, executedTools, mode: "CONVERSATIONAL_STEP_2" };
-  }
+      const targetDate = transcriptData.resolvedDate;
 
-  // Step A3: AI asked "Konsi date ki" -> User gives Date
-  if (prevAssistantMsg.includes("konsi date ki") || prevAssistantMsg.includes("कौन सी तारीख") || prevAssistantMsg.includes("date ki attendance")) {
-    const dateStr = lastUserMsg.trim();
+      const updatedRecord = updateStudentAttendanceRecord(studentObj.id, targetDate, status, "Marked via Chat", studentObj.name);
+      executedTools.push({ name: "mark_attendance", input: { studentId: studentObj.id, date: targetDate, status }, result: updatedRecord });
 
-    reply = getLocalizedText({
-      language,
-      en: `${dateStr} ko ${transcriptData.studentName || "student"} Present hai ya Absent?`,
-      hi: `${dateStr} को ${transcriptData.studentName || "student"} Present है या Absent?`
-    });
-    return { reply, executedTools, mode: "CONVERSATIONAL_STEP_3" };
-  }
-
-  // Step A4: AI asked "Present hai ya Absent" -> User gives Status
-  if (prevAssistantMsg.includes("present hai ya absent") || prevAssistantMsg.includes("present है या absent") || prevAssistantMsg.includes("present") || prevAssistantMsg.includes("absent")) {
-    const isAbsent = lowerMsg.includes("absent") || lowerMsg.includes("अब्सेंट") || lowerMsg.includes("अनुपस्थित") || lowerMsg.includes("nahi");
-    const status = isAbsent ? "Absent" : "Present";
-
-    const targetStudentName = transcriptData.studentName || "student";
-    let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
-    }
-
-    const targetDate = transcriptData.resolvedDate;
-
-    const updatedRecord = updateStudentAttendanceRecord(studentObj.id, targetDate, status, "Marked via Chat", studentObj.name);
-    executedTools.push({ name: "mark_attendance", input: { studentId: studentObj.id, date: targetDate, status }, result: updatedRecord });
-
-    reply = getLocalizedText({
-      language,
-      en: `Ho gaya! ${studentObj.name} ki ${targetDate} ki attendance ${status} mark ho gayi hai. Kya aap kisi aur student ki attendance lagana chahte hain?`,
-      hi: `हो गया! ${studentObj.name} की ${targetDate} की अटेंडेंस ${status} मार्क हो गई है। क्या आप किसी और छात्र की उपस्थिति दर्ज करना चाहते हैं?`
-    });
-    return { reply, executedTools, mode: "CONVERSATIONAL_STEP_4" };
-  }
-
-  // Step B2: AI asked "Which student's marks" -> User gives Name for MARKS
-  if (
-    (prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("अंक") || prevAssistantMsg.includes("मार्क्स") || prevAssistantMsg.includes("update")) &&
-    (prevAssistantMsg.includes("konse bache") || prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("which student") || prevAssistantMsg.includes("would you like"))
-  ) {
-    const studentName = lastUserMsg.trim();
-    let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
-
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
-      executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
-    }
-
-    reply = getLocalizedText({
-      language,
-      en: `${studentObj.name} ke marks lagane hain. Konse subject mein lagane hain?`,
-      hi: `${studentObj.name} के मार्क्स लगाने हैं। कौन से सब्जेक्ट में लगाने हैं?`
-    });
-    return { reply, executedTools, mode: "MARKS_STEP_2" };
-  }
-
-  // Step B3: AI asked "Konse subject mein" -> User gives Subject
-  if (
-    prevAssistantMsg.includes("konse subject mein") ||
-    prevAssistantMsg.includes("कौन से सब्जेक्ट") ||
-    prevAssistantMsg.includes("subject mein") ||
-    prevAssistantMsg.includes("konse subject") ||
-    prevAssistantMsg.includes("which subject")
-  ) {
-    const subjectName = lastUserMsg.trim();
-
-    reply = getLocalizedText({
-      language,
-      en: `${subjectName} mein ${transcriptData.studentName || "student"} ke kitne marks aaye hain out of 100?`,
-      hi: `${subjectName} में ${transcriptData.studentName || "student"} के कितने मार्क्स आए हैं out of 100?`
-    });
-    return { reply, executedTools, mode: "MARKS_STEP_3" };
-  }
-
-  // Step B4: AI asked "kitne marks aaye hain out of 100" -> User gives Score
-  if (
-    prevAssistantMsg.includes("out of 100") ||
-    prevAssistantMsg.includes("kitne marks aaye") ||
-    prevAssistantMsg.includes("कितने मार्क्स आए") ||
-    prevAssistantMsg.includes(" कितने अंक ")
-  ) {
-    const scoreMatch = lowerMsg.match(/\d+/);
-    const numScore = scoreMatch ? parseInt(scoreMatch[0], 10) : transcriptData.targetScore;
-
-    if (numScore === null || numScore === undefined || isNaN(numScore)) {
       reply = getLocalizedText({
         language,
-        en: `${transcriptData.targetSubject || "Subject"} mein kitne marks aaye hain out of 100? Please number bataiye.`,
-        hi: `${transcriptData.targetSubject || "सब्जेक्ट"} में कितने मार्क्स आए हैं out of 100? कृपया नंबर बताइए।`
+        en: `Ho gaya! ${studentObj.name} ki ${targetDate} ki attendance ${status} mark ho gayi hai. Kya aap kisi aur student ki attendance lagana chahte hain?`,
+        hi: `हो गया! ${studentObj.name} की ${targetDate} की अटेंडेंस ${status} मार्क हो गई है। क्या आप किसी और छात्र की उपस्थिति दर्ज करना चाहते हैं?`
+      });
+      return { reply, executedTools, mode: "CONVERSATIONAL_STEP_4" };
+    }
+
+    // Step B2: AI asked "Which student's marks" -> User gives Name for MARKS
+    if (
+      (prevAssistantMsg.includes("marks") || prevAssistantMsg.includes("अंक") || prevAssistantMsg.includes("मार्क्स") || prevAssistantMsg.includes("update")) &&
+      (prevAssistantMsg.includes("konse bache") || prevAssistantMsg.includes("किस छात्र") || prevAssistantMsg.includes("which student") || prevAssistantMsg.includes("would you like"))
+    ) {
+      const studentName = lastUserMsg.trim();
+      let studentObj = findStudentByName(studentName, user.assignedClass || "10-A")[0];
+
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: studentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+        executedTools.push({ name: "register_student", input: { name: studentName }, result: reg });
+      }
+
+      reply = getLocalizedText({
+        language,
+        en: `${studentObj.name} ke marks lagane hain. Konse subject mein lagane hain?`,
+        hi: `${studentObj.name} के मार्क्स लगाने हैं। कौन से सब्जेक्ट में लगाने हैं?`
+      });
+      return { reply, executedTools, mode: "MARKS_STEP_2" };
+    }
+
+    // Step B3: AI asked "Konse subject mein" -> User gives Subject
+    if (
+      prevAssistantMsg.includes("konse subject mein") ||
+      prevAssistantMsg.includes("कौन से सब्जेक्ट") ||
+      prevAssistantMsg.includes("subject mein") ||
+      prevAssistantMsg.includes("konse subject") ||
+      prevAssistantMsg.includes("which subject")
+    ) {
+      const subjectName = lastUserMsg.trim();
+
+      reply = getLocalizedText({
+        language,
+        en: `${subjectName} mein ${transcriptData.studentName || "student"} ke kitne marks aaye hain out of 100?`,
+        hi: `${subjectName} में ${transcriptData.studentName || "student"} के कितने मार्क्स आए हैं out of 100?`
       });
       return { reply, executedTools, mode: "MARKS_STEP_3" };
     }
 
-    const targetStudentName = transcriptData.studentName || "student";
-    let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
-    if (!studentObj) {
-      const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
-      studentObj = reg.student;
+    // Step B4: AI asked "kitne marks aaye hain out of 100" -> User gives Score
+    if (
+      prevAssistantMsg.includes("out of 100") ||
+      prevAssistantMsg.includes("kitne marks aaye") ||
+      prevAssistantMsg.includes("कितने मार्क्स आए") ||
+      prevAssistantMsg.includes(" कितने अंक ")
+    ) {
+      const scoreMatch = lowerMsg.match(/\d+/);
+      const numScore = scoreMatch ? parseInt(scoreMatch[0], 10) : transcriptData.targetScore;
+
+      if (numScore === null || numScore === undefined || isNaN(numScore)) {
+        reply = getLocalizedText({
+          language,
+          en: `${transcriptData.targetSubject || "Subject"} mein kitne marks aaye hain out of 100? Please number bataiye.`,
+          hi: `${transcriptData.targetSubject || "सब्जेक्ट"} में कितने मार्क्स आए हैं out of 100? कृपया नंबर बताइए।`
+        });
+        return { reply, executedTools, mode: "MARKS_STEP_3" };
+      }
+
+      const targetStudentName = transcriptData.studentName || "student";
+      let studentObj = findStudentByName(targetStudentName, user.assignedClass || "10-A")[0];
+      if (!studentObj) {
+        const reg = registerNewStudent({ name: targetStudentName, className: user.assignedClass || "10-A", teacherId: user.id || "TEA3001" });
+        studentObj = reg.student;
+      }
+
+      const targetSubject = transcriptData.targetSubject || "Physics";
+
+      const updatedMarks = updateStudentMarksRecord(studentObj.id, targetSubject, numScore, studentObj.name);
+      executedTools.push({ name: "update_marks", input: { studentId: studentObj.id, subject: targetSubject, newMarks: numScore }, result: updatedMarks });
+
+      reply = getLocalizedText({
+        language,
+        en: `Done! ${studentObj.name} ke ${targetSubject} mein ${numScore} marks save ho gaye hain. Kya aap kisi aur subject ya student ke marks update karna chahte hain?`,
+        hi: `Done! ${studentObj.name} के ${targetSubject} में ${numScore} मार्क्स सेव हो गए हैं। क्या आप किसी और विषय या छात्र के अंक अपडेट करना चाहते हैं?`
+      });
+      return { reply, executedTools, mode: "MARKS_STEP_4" };
     }
-
-    const targetSubject = transcriptData.targetSubject || "Physics";
-
-    const updatedMarks = updateStudentMarksRecord(studentObj.id, targetSubject, numScore, studentObj.name);
-    executedTools.push({ name: "update_marks", input: { studentId: studentObj.id, subject: targetSubject, newMarks: numScore }, result: updatedMarks });
-
-    reply = getLocalizedText({
-      language,
-      en: `Done! ${studentObj.name} ke ${targetSubject} mein ${numScore} marks save ho gaye hain. Kya aap kisi aur subject ya student ke marks update karna chahte hain?`,
-      hi: `Done! ${studentObj.name} के ${targetSubject} में ${numScore} मार्क्स सेव हो गए हैं। क्या आप किसी और विषय या छात्र के अंक अपडेट करना चाहते हैं?`
-    });
-    return { reply, executedTools, mode: "MARKS_STEP_4" };
   }
 
   // Attendance Intent
@@ -851,8 +850,8 @@ function executeIntelligentLocalAgent({ messages, user, language, isConfirmedEsc
       } else {
         reply = getLocalizedText({
           language,
-          en: `${attRec.studentName}'s overall attendance is ${attRec.overallPercentage}% (${attRec.daysPresent} Days Present, ${attRec.daysAbsent} Days Absent). Would you like to check subject marks?`,
-          hi: `${attRec.studentName} की कुल उपस्थिति ${attRec.overallPercentage}% है (${attRec.daysPresent} दिन उपस्थित, ${attRec.daysAbsent} दिन अनुपस्थित)। क्या आप विषय-वार अंक भी देखना चाहते हैं?`
+          en: `Your overall attendance is ${attRec.overallPercentage}% (${attRec.daysPresent} Days Present, ${attRec.daysAbsent} Days Absent). Would you like to check subject marks?`,
+          hi: `आपकी कुल उपस्थिति ${attRec.overallPercentage}% है (${attRec.daysPresent} दिन उपस्थित, ${attRec.daysAbsent} दिन अनुपस्थित)। क्या आप विषय-वार अंक भी देखना चाहते हैं?`
         });
       }
     } else {
